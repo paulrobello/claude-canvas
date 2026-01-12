@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, useInput, useApp, useStdout } from "ink";
 import { MeetingPickerView } from "./calendar/scenarios/meeting-picker-view";
+import { EditView } from "./calendar/scenarios/edit-view";
 import type { MeetingPickerConfig } from "../scenarios/types";
+import type { EditCalendarConfig } from "./calendar/types";
 
 export interface CalendarEvent {
   id: string;
@@ -358,6 +360,21 @@ export function Calendar({ id, config, socketPath, scenario = "display" }: Props
       endHour: 22,
     };
     return <MeetingPickerView id={id} config={pickerConfig} socketPath={socketPath} />;
+  }
+
+  // Route to edit view if that scenario is requested
+  if (scenario === "edit") {
+    const editConfig: EditCalendarConfig = {
+      events: config?.events?.map((e) => ({
+        ...e,
+        startTime: new Date(e.startTime),
+        endTime: new Date(e.endTime),
+      })),
+      storageFile: (config as EditCalendarConfig)?.storageFile,
+      startHour: 6,
+      endHour: 22,
+    };
+    return <EditView id={id} config={editConfig} socketPath={socketPath} />;
   }
 
   // Default display scenario
