@@ -1,11 +1,11 @@
-// Document Display Scenario - Read-only document view
+// Document Rendered Scenario - Full-width formatted markdown view
 
 import type { ScenarioDefinition } from "../types";
 import type { DocumentConfig } from "../../canvases/document/types";
 
-export const documentDisplayScenario: ScenarioDefinition<DocumentConfig, void> = {
-  name: "display",
-  description: "Read-only document view with markdown rendering",
+export const documentRenderedScenario: ScenarioDefinition<DocumentConfig, void> = {
+  name: "rendered",
+  description: "Full-width rendered markdown view with formatted output",
   canvasKind: "document",
   interactionMode: "view-only",
   closeOn: "escape",
@@ -13,5 +13,6 @@ export const documentDisplayScenario: ScenarioDefinition<DocumentConfig, void> =
     content: "",
     readOnly: true,
     fullWidth: true,
+    renderer: "rendered",
   },
 };

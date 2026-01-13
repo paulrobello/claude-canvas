@@ -141,8 +141,17 @@ type ControllerMessage =
 | `pong` | Health check response | `{ type: "pong" }` |
 | `selection` | Selection data response | `{ type: "selection", data: {...} }` |
 | `content` | Content data response | `{ type: "content", data: {...} }` |
+| `gmail` | Email opened in Gmail (canvas handles this directly) | `{ type: "gmail", data: GmailActionData }` |
 
 ```typescript
+interface GmailActionData {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  content: string;
+}
+
 type CanvasMessage =
   | { type: "ready"; scenario: string }
   | { type: "selected"; data: unknown }
@@ -150,7 +159,8 @@ type CanvasMessage =
   | { type: "error"; message: string }
   | { type: "pong" }
   | { type: "selection"; data: { selectedText: string; startOffset: number; endOffset: number } | null }
-  | { type: "content"; data: { content: string; cursorPosition: number } };
+  | { type: "content"; data: { content: string; cursorPosition: number } }
+  | { type: "gmail"; data: GmailActionData };
 ```
 
 ## Cross-Platform Support
@@ -687,6 +697,8 @@ data(sock, data) {
 
 ## Related Documentation
 
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture and CLI reference
 - [README.md](../README.md) - Project overview and canvas types
-- [SKILL.md](../canvas/skills/canvas/SKILL.md) - Canvas skill documentation
+- [Canvas SKILL.md](../canvas/skills/canvas/SKILL.md) - Main canvas skill documentation
 - [Chart SKILL.md](../canvas/skills/chart/SKILL.md) - Chart-specific documentation
+- [Email SKILL.md](../canvas/skills/email/SKILL.md) - Email preview and Gmail integration

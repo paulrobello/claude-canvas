@@ -5,8 +5,97 @@ import { Box, Text, useInput, useApp, useStdout } from "ink";
 import { useIPCServer } from "./calendar/hooks/use-ipc-server";
 import { useMouse } from "./calendar/hooks/use-mouse";
 import { RawMarkdownRenderer } from "./document/components/raw-markdown-renderer";
+import { TtyTableRenderer } from "./document/components/tty-table-renderer";
 import { EmailHeader } from "./document/components/email-header";
 import type { DocumentConfig, EmailConfig } from "./document/types";
+
+/**
+ * Build a Gmail compose URL with pre-filled fields.
+ * Uses the Gmail compose URL format: https://mail.google.com/mail/?view=cm&...
+ * Handles URL length limits by truncating body if necessary.
+ */
+function buildGmailComposeUrl(params: {
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject?: string;
+  body?: string;
+}): { url: string; truncated: boolean } {
+  // Safe URL length limit (conservative, works across all browsers)
+  const MAX_URL_LENGTH = 2000;
+  const base = "https://mail.google.com/mail/?view=cm";
+
+  // Build non-body params first (these take priority)
+  const fixedParams: string[] = [];
+  if (params.to?.length) {
+    fixedParams.push(`to=${encodeURIComponent(params.to.join(","))}`);
+  }
+  if (params.cc?.length) {
+    fixedParams.push(`cc=${encodeURIComponent(params.cc.join(","))}`);
+  }
+  if (params.bcc?.length) {
+    fixedParams.push(`bcc=${encodeURIComponent(params.bcc.join(","))}`);
+  }
+  if (params.subject) {
+    fixedParams.push(`su=${encodeURIComponent(params.subject)}`);
+  }
+
+  // Calculate remaining space for body
+  const baseWithParams = fixedParams.length > 0
+    ? `${base}&${fixedParams.join("&")}`
+    : base;
+
+  let truncated = false;
+  let body = params.body || "";
+
+  if (body) {
+    // Calculate how much space we have for the body parameter
+    // Format: &body=<encoded_body>
+    const bodyPrefix = "&body=";
+    const availableLength = MAX_URL_LENGTH - baseWithParams.length - bodyPrefix.length;
+
+    // Encode and check length
+    let encodedBody = encodeURIComponent(body);
+    if (encodedBody.length > availableLength) {
+      // Truncate the original body and re-encode
+      // Binary search for the right length (encoding expands the string unpredictably)
+      let low = 0;
+      let high = body.length;
+      while (low < high) {
+        const mid = Math.floor((low + high + 1) / 2);
+        const testEncoded = encodeURIComponent(body.slice(0, mid) + "...[truncated]");
+        if (testEncoded.length <= availableLength) {
+          low = mid;
+        } else {
+          high = mid - 1;
+        }
+      }
+      body = body.slice(0, low) + "...[truncated]";
+      encodedBody = encodeURIComponent(body);
+      truncated = true;
+    }
+
+    const url = `${baseWithParams}${bodyPrefix}${encodedBody}`;
+    return { url, truncated };
+  }
+
+  return { url: baseWithParams, truncated: false };
+}
+
+/**
+ * Open a URL in the default browser (cross-platform).
+ */
+async function openUrl(url: string): Promise<void> {
+  const platform = process.platform;
+  if (platform === "darwin") {
+    await Bun.$`open ${url}`.quiet();
+  } else if (platform === "win32") {
+    await Bun.$`cmd /c start "" ${url}`.quiet();
+  } else {
+    // Linux and others
+    await Bun.$`xdg-open ${url}`.quiet();
+  }
+}
 
 interface Props {
   id: string;
@@ -27,6 +116,9 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
 
   // Scroll state
   const [scrollOffset, setScrollOffset] = useState(0);
+
+  // Rendered line count (for rendered mode scrolling)
+  const [renderedLineCount, setRenderedLineCount] = useState(0);
 
   // Cursor position (character offset in content)
   const [cursorPosition, setCursorPosition] = useState(0);
@@ -69,12 +161,32 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
   // Check if this is an email preview scenario
   const isEmailPreview = scenario === "email-preview";
 
+  // Check if using rendered markdown view (initial state)
+  const initialRenderedView = scenario === "rendered";
+
+  // View mode toggle state (for switching between raw and rendered)
+  const [viewMode, setViewMode] = useState<"raw" | "rendered">(
+    initialRenderedView ? "rendered" : "raw"
+  );
+
+  // Current view state
+  const isRenderedView = viewMode === "rendered";
+
   // Config with defaults
+  // Full width for display, rendered, and email-preview scenarios
+  const isToggleableView = scenario === "display" || scenario === "rendered";
+  const shouldDefaultFullWidth = isToggleableView || isEmailPreview;
   const {
-    content: initialContent = "# Welcome\n\nNo content provided.",
+    content: rawContent = "# Welcome\n\nNo content provided.",
     title,
-    readOnly = scenario === "display" || isEmailPreview,
+    diffs = [],
+    readOnly = scenario === "display" || isEmailPreview || initialRenderedView,
+    fullWidth = shouldDefaultFullWidth,
+    renderer = viewMode,
   } = liveConfig || {};
+
+  // Normalize content: convert literal \n to actual newlines (common in CLI/JSON input)
+  const initialContent = rawContent.replace(/\\n/g, "\n");
 
   // Email-specific fields (only used in email-preview scenario)
   const emailConfig = liveConfig as EmailConfig | undefined;
@@ -87,10 +199,10 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
   // Editable content state
   const [content, setContent] = useState(initialContent);
 
-  // Sync content when liveConfig changes
+  // Sync content when liveConfig changes (normalize literal \n)
   useEffect(() => {
     if (liveConfig?.content) {
-      setContent(liveConfig.content);
+      setContent(liveConfig.content.replace(/\\n/g, "\n"));
     }
   }, [liveConfig?.content]);
 
@@ -112,8 +224,8 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
   // Calculate layout
   const termWidth = dimensions.width;
   const termHeight = dimensions.height;
-  const maxDocWidth = 80;
-  const docWidth = Math.min(termWidth - 8, maxDocWidth);
+  const maxDocWidth = fullWidth ? termWidth - 4 : 80;
+  const docWidth = Math.min(termWidth - 4, maxDocWidth);
   const headerHeight = 3;
   const footerHeight = 2;
   // Email header takes extra lines: from, to, cc (optional), bcc (optional), subject, separator
@@ -123,7 +235,8 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
   const viewportHeight = termHeight - headerHeight - footerHeight - emailHeaderLines - 2;
 
   // Line count and max scroll
-  const totalLines = content.split("\n").length;
+  const rawLineCount = content.split("\n").length;
+  const totalLines = isRenderedView && renderedLineCount > 0 ? renderedLineCount : rawLineCount;
   const maxScroll = Math.max(0, totalLines - viewportHeight);
 
   // Calculate content area offset for mouse coordinates
@@ -259,6 +372,42 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
         return;
       }
       ipc.sendCancelled("User quit");
+      exit();
+      return;
+    }
+
+    // Toggle view mode with 'v' key (in display/rendered scenarios)
+    if (input === "v" && (scenario === "display" || scenario === "rendered")) {
+      setViewMode((mode) => mode === "raw" ? "rendered" : "raw");
+      setScrollOffset(0); // Reset scroll when switching views
+      return;
+    }
+
+    // Open in Gmail with Ctrl+G (in email-preview scenario)
+    if (key.ctrl && input === "g" && isEmailPreview) {
+      // Build Gmail compose URL and open directly
+      const { url, truncated } = buildGmailComposeUrl({
+        to: emailTo,
+        cc: emailCc,
+        bcc: emailBcc,
+        subject: emailSubject,
+        body: content,
+      });
+
+      // Open Gmail in browser (don't await - fire and forget)
+      openUrl(url).catch(() => {
+        // Silently ignore errors - browser may not open in some environments
+      });
+
+      // Also notify via IPC (for logging/notification if controller is listening)
+      ipc.sendGmail({
+        to: emailTo,
+        cc: emailCc,
+        bcc: emailBcc,
+        subject: emailSubject,
+        content: truncated ? content + "\n\n[Note: Body was truncated in Gmail URL]" : content,
+      });
+
       exit();
       return;
     }
@@ -442,6 +591,11 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
           <Text bold color="white">
             {isEmailPreview ? "Email Preview" : (title || "Document")}
           </Text>
+          {(scenario === "display" || scenario === "rendered") && (
+            <Text color={isRenderedView ? "green" : "yellow"} dimColor>
+              {" "}[{isRenderedView ? "rendered" : "raw"}]
+            </Text>
+          )}
           <Box flexGrow={1} />
           <Text color="gray" dimColor>
             {totalLines > viewportHeight ? `${scrollPercent}%` : ""}
@@ -470,15 +624,25 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
               width={docWidth - 6}
             />
           )}
-          <RawMarkdownRenderer
-            content={content}
-            cursorPosition={readOnly ? undefined : cursorPosition}
-            selectionStart={selectionStart}
-            selectionEnd={selectionEnd}
-            scrollOffset={scrollOffset}
-            viewportHeight={viewportHeight}
-            terminalWidth={docWidth - 6}
-          />
+          {renderer === "rendered" ? (
+            <TtyTableRenderer
+              content={content}
+              terminalWidth={docWidth - 6}
+              scrollOffset={scrollOffset}
+              viewportHeight={viewportHeight}
+              onLineCountChange={setRenderedLineCount}
+            />
+          ) : (
+            <RawMarkdownRenderer
+              content={content}
+              cursorPosition={readOnly ? undefined : cursorPosition}
+              selectionStart={selectionStart}
+              selectionEnd={selectionEnd}
+              scrollOffset={scrollOffset}
+              viewportHeight={viewportHeight}
+              terminalWidth={docWidth - 6}
+            />
+          )}
         </Box>
       </Box>
 
@@ -486,7 +650,15 @@ export function Document({ id, config: initialConfig, socketPath, scenario = "di
       <Box justifyContent="center">
         <Box width={docWidth} justifyContent="space-between">
           <Text color="gray" dimColor>
-            {readOnly ? "↑↓/scroll to navigate • Esc quit" : "click/drag select • scroll/↑↓ navigate • Esc quit"}
+            {readOnly
+              ? isEmailPreview
+                ? "↑↓/scroll • ^G Gmail • Esc quit"
+                : (scenario === "display" || scenario === "rendered")
+                  ? `↑↓/scroll • v toggle view • Esc quit`
+                  : "↑↓/scroll to navigate • Esc quit"
+              : isEmailPreview
+                ? "click/drag select • ↑↓ scroll • ^G Gmail • Esc quit"
+                : "click/drag select • scroll/↑↓ navigate • Esc quit"}
           </Text>
           <Text color="gray" dimColor>
             {!readOnly && (

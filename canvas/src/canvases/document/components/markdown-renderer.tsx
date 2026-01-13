@@ -12,7 +12,7 @@ import type {
 import { MARKDOWN_STYLES, DIFF_STYLES, SELECTION_STYLE } from "../types";
 
 // Block types for parsing
-type BlockType = "heading" | "paragraph" | "codeBlock" | "list" | "blockquote" | "hr" | "blank";
+type BlockType = "heading" | "paragraph" | "codeBlock" | "list" | "blockquote" | "hr" | "blank" | "table";
 
 interface Block {
   type: BlockType;
@@ -21,6 +21,8 @@ interface Block {
   level?: number;        // For headings (1-4) and lists (indent level)
   ordered?: boolean;     // For lists
   items?: string[];      // For lists
+  tableRows?: string[][]; // For tables - parsed cells
+  tableAligns?: ("left" | "center" | "right")[]; // For tables - column alignments
 }
 
 // Parse markdown into blocks
@@ -152,6 +154,55 @@ function parseBlocks(content: string): Block[] {
         ordered: true,
       });
       offset = lineStart + listOffset;
+      continue;
+    }
+
+    // Table (lines starting with |)
+    if (line.startsWith("|") && line.includes("|", 1)) {
+      const tableLines = [line];
+      let tableOffset = line.length + 1;
+      i++;
+      // Collect all table rows (lines starting with |)
+      while (i < lines.length && lines[i].startsWith("|")) {
+        tableLines.push(lines[i]);
+        tableOffset += lines[i].length + 1;
+        i++;
+      }
+
+      // Parse table structure
+      const tableRows: string[][] = [];
+      const tableAligns: ("left" | "center" | "right")[] = [];
+
+      for (let rowIdx = 0; rowIdx < tableLines.length; rowIdx++) {
+        const rowLine = tableLines[rowIdx];
+        // Split by | and trim, filtering empty first/last from leading/trailing |
+        const cells = rowLine.split("|").slice(1, -1).map(c => c.trim());
+
+        // Check if this is the separator row (contains dashes)
+        if (rowIdx === 1 && cells.every(c => /^:?-+:?$/.test(c))) {
+          // Parse alignments from separator
+          for (const cell of cells) {
+            if (cell.startsWith(":") && cell.endsWith(":")) {
+              tableAligns.push("center");
+            } else if (cell.endsWith(":")) {
+              tableAligns.push("right");
+            } else {
+              tableAligns.push("left");
+            }
+          }
+        } else {
+          tableRows.push(cells);
+        }
+      }
+
+      blocks.push({
+        type: "table",
+        source: tableLines.join("\n"),
+        sourceOffset: lineStart,
+        tableRows,
+        tableAligns,
+      });
+      offset = lineStart + tableOffset;
       continue;
     }
 
@@ -512,6 +563,108 @@ function renderBlocks(blocks: Block[], terminalWidth: number): RenderedLine[] {
           wl.lineNumber = lineNumber++;
         }
         lines.push(...wrappedPara);
+        break;
+      }
+
+      case "table": {
+        const rows = block.tableRows || [];
+        const aligns = block.tableAligns || [];
+        if (rows.length === 0) break;
+
+        // Calculate column widths
+        const colCount = Math.max(...rows.map(r => r.length));
+        const colWidths: number[] = [];
+        for (let col = 0; col < colCount; col++) {
+          let maxWidth = 0;
+          for (const row of rows) {
+            if (row[col]) {
+              maxWidth = Math.max(maxWidth, row[col].length);
+            }
+          }
+          colWidths.push(Math.min(maxWidth, Math.floor((terminalWidth - 4) / colCount)));
+        }
+
+        // Render table with box drawing
+        let offset = block.sourceOffset;
+
+        // Top border
+        const topBorder = "┌" + colWidths.map(w => "─".repeat(w + 2)).join("┬") + "┐";
+        lines.push({
+          lineNumber: lineNumber++,
+          sourceOffset: offset,
+          sourceLength: 0,
+          segments: [{ text: topBorder, sourceOffset: offset, sourceLength: 0, style: { color: "gray" } }],
+          indent: 0,
+          isBlank: false,
+        });
+
+        for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+          const row = rows[rowIdx];
+          const isHeader = rowIdx === 0;
+
+          // Build row content
+          const rowSegments: LineSegment[] = [
+            { text: "│", sourceOffset: offset, sourceLength: 0, style: { color: "gray" } },
+          ];
+
+          for (let col = 0; col < colCount; col++) {
+            const cell = row[col] || "";
+            const width = colWidths[col];
+            const align = aligns[col] || "left";
+
+            // Pad cell content based on alignment
+            let paddedCell: string;
+            if (align === "center") {
+              const totalPad = width - cell.length;
+              const leftPad = Math.floor(totalPad / 2);
+              const rightPad = totalPad - leftPad;
+              paddedCell = " ".repeat(leftPad) + cell.slice(0, width) + " ".repeat(rightPad);
+            } else if (align === "right") {
+              paddedCell = cell.slice(0, width).padStart(width);
+            } else {
+              paddedCell = cell.slice(0, width).padEnd(width);
+            }
+
+            rowSegments.push({ text: " ", sourceOffset: offset, sourceLength: 0, style: {} });
+            // Parse inline markdown in cells
+            const cellSegments = parseInline(paddedCell, offset, isHeader ? { bold: true, color: "cyan" } : {});
+            rowSegments.push(...cellSegments);
+            rowSegments.push({ text: " │", sourceOffset: offset, sourceLength: 0, style: { color: "gray" } });
+          }
+
+          lines.push({
+            lineNumber: lineNumber++,
+            sourceOffset: offset,
+            sourceLength: 0,
+            segments: rowSegments,
+            indent: 0,
+            isBlank: false,
+          });
+
+          // Header separator
+          if (isHeader && rows.length > 1) {
+            const sepBorder = "├" + colWidths.map(w => "─".repeat(w + 2)).join("┼") + "┤";
+            lines.push({
+              lineNumber: lineNumber++,
+              sourceOffset: offset,
+              sourceLength: 0,
+              segments: [{ text: sepBorder, sourceOffset: offset, sourceLength: 0, style: { color: "gray" } }],
+              indent: 0,
+              isBlank: false,
+            });
+          }
+        }
+
+        // Bottom border
+        const bottomBorder = "└" + colWidths.map(w => "─".repeat(w + 2)).join("┴") + "┘";
+        lines.push({
+          lineNumber: lineNumber++,
+          sourceOffset: offset,
+          sourceLength: 0,
+          segments: [{ text: bottomBorder, sourceOffset: offset, sourceLength: 0, style: { color: "gray" } }],
+          indent: 0,
+          isBlank: false,
+        });
         break;
       }
     }

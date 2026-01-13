@@ -15,5 +15,6 @@ export const emailPreviewScenario: ScenarioDefinition<EmailConfig, DocumentSelec
     to: [],
     subject: "",
     readOnly: false,
+    fullWidth: true,
   },
 };

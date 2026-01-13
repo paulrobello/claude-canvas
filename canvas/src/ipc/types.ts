@@ -13,6 +13,15 @@ export type ControllerMessage =
   | { type: "getSelection" }
   | { type: "getContent" };
 
+// Gmail action data from email-preview
+export interface GmailActionData {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  content: string;
+}
+
 // Messages sent from Canvas to Controller (Claude)
 export type CanvasMessage =
   | { type: "ready"; scenario: string }
@@ -21,7 +30,8 @@ export type CanvasMessage =
   | { type: "error"; message: string }
   | { type: "pong" }
   | { type: "selection"; data: { selectedText: string; startOffset: number; endOffset: number } | null }
-  | { type: "content"; data: { content: string; cursorPosition: number } };
+  | { type: "content"; data: { content: string; cursorPosition: number } }
+  | { type: "gmail"; data: GmailActionData };
 
 // Connection info for cross-platform IPC
 export interface ConnectionInfo {

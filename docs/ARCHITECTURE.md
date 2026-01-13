@@ -100,6 +100,38 @@ The CLI (`cli.ts`) serves as the command dispatcher, handling canvas spawning, d
 | `content <id>` | Get content from document canvas |
 | `env` | Show detected terminal environment |
 
+**Spawn Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--id <id>` | Canvas instance ID for IPC |
+| `--config <json>` | Canvas configuration (JSON) |
+| `--config-file <path>` | Path to config file (JSON) |
+| `--socket <path>` | Custom socket path for IPC |
+| `--scenario <name>` | Scenario name (e.g., display, meeting-picker) |
+| `--wait` | Wait for canvas response and output as JSON |
+| `--timeout <ms>` | Timeout in milliseconds for --wait |
+
+**Using --wait:**
+
+The `--wait` flag enables synchronous canvas interaction. Instead of returning immediately after spawning, the CLI:
+
+1. Spawns the canvas in a new pane
+2. Connects to the canvas IPC socket
+3. Waits for a terminal message (`gmail`, `selected`, `cancelled`, `error`)
+4. Outputs the message as JSON and exits
+
+```bash
+# Example: Wait for email preview response
+RESPONSE=$(bun run src/cli.ts spawn document --scenario email-preview \
+  --config '{"to":["test@example.com"],"subject":"Test"}' --wait)
+
+# Parse response
+if echo "$RESPONSE" | jq -e '.type == "gmail"' > /dev/null; then
+  echo "User wants to send email"
+fi
+```
+
 ### Terminal Manager
 
 The terminal module (`terminal.ts`) handles cross-platform terminal detection and canvas spawning.
@@ -536,4 +568,5 @@ graph LR
 
 - [IPC.md](./IPC.md) - Inter-process communication patterns
 - [README.md](../README.md) - Project overview and canvas types
-- [Canvas SKILL.md](../canvas/skills/canvas/SKILL.md) - Usage documentation
+- [Canvas SKILL.md](../canvas/skills/canvas/SKILL.md) - Main canvas skill documentation
+- [Email SKILL.md](../canvas/skills/email/SKILL.md) - Email preview and Gmail integration

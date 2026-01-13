@@ -105,7 +105,8 @@ interface DocumentSelection {
 
 - **Mouse click and drag**: Select text (edit scenario)
 - `↑/↓` or scroll: Navigate document
-- `q` or `Esc`: Close/cancel
+- `Ctrl+G` (`^G`): Open in Gmail (email-preview scenario only)
+- `Esc`: Close/cancel
 
 ## API Usage
 

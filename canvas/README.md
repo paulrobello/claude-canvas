@@ -47,6 +47,7 @@ bun run src/cli.ts spawn document --scenario edit --config '{"content": "# Hello
 - `canvas` - Main skill with overview and IPC details
 - `calendar` - Calendar display and meeting picker
 - `document` - Markdown rendering and text selection
+- `email` - Email preview with Gmail integration (`Ctrl+G` to open)
 - `flight` - Flight comparison and seatmaps
 
 ## Requirements

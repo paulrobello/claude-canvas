@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useApp } from "ink";
 import { createIPCServer, type IPCServer } from "../../../ipc/server";
-import type { CanvasMessage, ControllerMessage } from "../../../ipc/types";
+import type { CanvasMessage, ControllerMessage, GmailActionData } from "../../../ipc/types";
 
 export interface UseIPCServerOptions {
   socketPath: string | undefined;
@@ -20,6 +20,7 @@ export interface IPCServerHandle {
   sendSelected: (data: unknown) => void;
   sendCancelled: (reason?: string) => void;
   sendError: (message: string) => void;
+  sendGmail: (data: GmailActionData) => void;
 }
 
 export function useIPCServer(options: UseIPCServerOptions): IPCServerHandle {
@@ -123,11 +124,16 @@ export function useIPCServer(options: UseIPCServerOptions): IPCServerHandle {
     serverRef.current?.broadcast({ type: "error", message });
   }, []);
 
+  const sendGmail = useCallback((data: GmailActionData) => {
+    serverRef.current?.broadcast({ type: "gmail", data });
+  }, []);
+
   return {
     isConnected,
     sendReady,
     sendSelected,
     sendCancelled,
     sendError,
+    sendGmail,
   };
 }

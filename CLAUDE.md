@@ -109,3 +109,10 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## tmux
+
+- **NEVER kill the top-level tmux session or pane** - Claude is running in it
+- Use `tmux split-window` to spawn canvases in new panes
+- Use `tmux kill-pane -t <pane-id>` to kill spawned canvas panes (not pane %0)
+- Check pane IDs with `tmux list-panes` before killing

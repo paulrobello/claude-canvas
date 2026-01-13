@@ -29,7 +29,7 @@ A TUI toolkit that gives Claude Code its own display. Spawn interactive terminal
 | **AI** | `agent-dashboard` | Agent monitoring with status, logs, token usage, context visualization |
 | **Data Viz** | `chart` | Interactive charts with pan/zoom, braille rendering, live updates |
 | **Calendar** | `calendar` | Calendar display, meeting picker, event CRUD with local storage |
-| **Documents** | `document` | Markdown viewer/editor with syntax highlighting, selection support |
+| **Documents** | `document` | Markdown viewer/editor with rendered tables, syntax highlighting, view toggle |
 
 ### Interactive Features
 
@@ -182,6 +182,28 @@ Calendar edit mode supports:
 - **Delete**: Press `d` to remove event
 - Events persist to `~/.claude/calendar-events.json`
 
+### Document Viewer
+
+```bash
+# Rendered mode - formatted markdown with tables
+bun run src/cli.ts spawn document --scenario rendered --config '{
+  "content": "# Hello\n\n| A | B |\n|---|---|\n| 1 | 2 |",
+  "title": "My Document"
+}'
+
+# Display mode - raw markdown with syntax highlighting
+bun run src/cli.ts spawn document --scenario display --config '{
+  "content": "# Hello\n\nSome **bold** and *italic* text.",
+  "title": "My Document"
+}'
+```
+
+Document features:
+- **Rendered mode**: Formatted markdown with proper table rendering (box-drawing borders)
+- **Raw mode**: Syntax-highlighted markdown source
+- **View toggle**: Press `v` to switch between raw and rendered views
+- **Full-width**: Uses entire terminal width for better readability
+
 ### Flight Booking
 
 ```bash
@@ -235,6 +257,7 @@ Common shortcuts across all canvases:
 
 Canvas-specific shortcuts:
 - **Calendar**: `←→` week, `t` today, `c` create, `e` edit, `d` delete
+- **Document**: `v` toggle raw/rendered view, `^G` open in Gmail (email-preview)
 - **Kanban**: `Space` drag card, `Enter` move to next column
 - **Flight**: `Tab` switch flight list/seatmap focus
 - **Chart**: `+/-` zoom, `r` reset, `f` fit to data, `c` crosshair

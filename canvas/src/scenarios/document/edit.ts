@@ -12,5 +12,6 @@ export const documentEditScenario: ScenarioDefinition<DocumentConfig, DocumentSe
   defaultConfig: {
     content: "",
     readOnly: false,
+    fullWidth: true,
   },
 };

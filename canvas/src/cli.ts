@@ -59,6 +59,8 @@ program
   .option("--config-file <path>", "Path to config file (JSON)")
   .option("--socket <path>", "Socket path for IPC")
   .option("--scenario <name>", "Scenario name (e.g., display, meeting-picker)")
+  .option("--wait", "Wait for canvas response and output as JSON")
+  .option("--timeout <ms>", "Timeout in milliseconds for --wait (default: no timeout)")
   .action(async (kind = "demo", options) => {
     const id = options.id || `${kind}-1`;
 
@@ -80,7 +82,22 @@ program
       socketPath: options.socket,
       scenario: options.scenario,
     });
-    console.log(`Spawned ${kind} canvas '${id}' via ${result.method}`);
+
+    if (options.wait) {
+      // Wait for canvas to send a terminal message (gmail, selected, cancelled, error)
+      const socketPath = getSocketPath(id);
+      const timeout = options.timeout ? parseInt(options.timeout, 10) : undefined;
+
+      try {
+        const message = await waitForCanvasMessage(id, socketPath, timeout);
+        console.log(JSON.stringify(message));
+      } catch (err) {
+        console.error(JSON.stringify({ type: "error", message: String(err) }));
+        process.exit(1);
+      }
+    } else {
+      console.log(`Spawned ${kind} canvas '${id}' via ${result.method}`);
+    }
   });
 
 program
@@ -208,6 +225,118 @@ program
 // Cross-platform IPC helpers
 // ============================================
 
+// Terminal message types that indicate canvas completion
+const TERMINAL_MESSAGE_TYPES = ["gmail", "selected", "cancelled", "error"];
+
+async function waitForCanvasMessage(
+  id: string,
+  socketPath: string,
+  timeout?: number
+): Promise<unknown> {
+  // Wait for socket to be available (canvas may still be starting)
+  const maxRetries = 50;
+  const retryDelay = 100;
+  let conn: Awaited<ReturnType<typeof getConnection>> | null = null;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      conn = await getConnection(id, socketPath);
+      break;
+    } catch {
+      await Bun.sleep(retryDelay);
+    }
+  }
+
+  if (!conn) {
+    throw new Error(`Canvas '${id}' did not start within ${maxRetries * retryDelay}ms`);
+  }
+
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    let buffer = "";
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    if (timeout) {
+      timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error(`Timeout waiting for canvas response after ${timeout}ms`));
+        }
+      }, timeout);
+    }
+
+    const socketHandlers = {
+      data(socket: any, data: any) {
+        if (resolved) return;
+
+        buffer += data.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const message = JSON.parse(line);
+            // Skip "ready" and "pong" messages, wait for terminal messages
+            if (TERMINAL_MESSAGE_TYPES.includes(message.type)) {
+              resolved = true;
+              if (timeoutId) clearTimeout(timeoutId);
+              socket.end();
+              resolve(message);
+              return;
+            }
+          } catch {
+            // Ignore malformed JSON
+          }
+        }
+      },
+      open() {
+        // Just wait for messages, don't send anything
+      },
+      close() {
+        if (!resolved) {
+          resolved = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(new Error("Canvas closed without sending a response"));
+        }
+      },
+      error(socket: any, error: Error) {
+        if (!resolved) {
+          resolved = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(error);
+        }
+      },
+    };
+
+    // Connect to canvas IPC
+    if (conn.type === "tcp") {
+      Bun.connect({
+        hostname: conn.host!,
+        port: conn.port!,
+        socket: socketHandlers,
+      }).catch((err) => {
+        if (!resolved) {
+          resolved = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(err);
+        }
+      });
+    } else {
+      Bun.connect({
+        unix: conn.socketPath!,
+        socket: socketHandlers,
+      }).catch((err) => {
+        if (!resolved) {
+          resolved = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          reject(err);
+        }
+      });
+    }
+  });
+}
+
 async function getConnection(id: string, socketPath: string): Promise<{
   type: "unix" | "tcp";
   socketPath?: string;
@@ -230,6 +359,10 @@ async function getConnection(id: string, socketPath: string): Promise<{
 
     return { type: "tcp", host: "127.0.0.1", port };
   } else {
+    // On Unix, verify socket exists (use existsSync since Bun.file doesn't work for sockets)
+    if (!existsSync(socketPath)) {
+      throw new Error(`Socket not found: ${socketPath}`);
+    }
     return { type: "unix", socketPath };
   }
 }

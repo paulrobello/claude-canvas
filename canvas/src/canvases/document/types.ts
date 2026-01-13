@@ -6,6 +6,8 @@ export interface DocumentConfig {
   title?: string;            // Optional document title
   diffs?: DocumentDiff[];    // Optional diff markers for highlighting
   readOnly?: boolean;        // Disable selection (default false)
+  fullWidth?: boolean;       // Use full terminal width (default false, max 80)
+  renderer?: "raw" | "rendered"; // Markdown renderer type (default "raw")
 }
 
 // Email preview configuration (extends document for email-preview scenario)
