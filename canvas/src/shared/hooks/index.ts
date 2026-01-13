@@ -54,19 +54,22 @@ export interface MouseEvent {
   shift: boolean;
   meta: boolean;
   ctrl: boolean;
-  type: 'press' | 'release' | 'move';
+  type: 'press' | 'release' | 'move' | 'scroll';
+  isScroll: boolean;
+  scrollDirection: 'up' | 'down' | null;
 }
 
 export interface UseMouseOptions {
   onClick?: (event: MouseEvent) => void;
   onMove?: (event: MouseEvent) => void;
   onRelease?: (event: MouseEvent) => void;
+  onScroll?: (event: MouseEvent) => void;
   onDrag?: (start: Position, current: Position) => void;
   enabled?: boolean;
 }
 
 export function useMouse(options: UseMouseOptions = {}): void {
-  const { onClick, onMove, onRelease, onDrag, enabled = true } = options;
+  const { onClick, onMove, onRelease, onScroll, onDrag, enabled = true } = options;
   const { stdout, stdin } = useStdout();
   const dragStart = useRef<Position | null>(null);
 
@@ -92,14 +95,21 @@ export function useMouse(options: UseMouseOptions = {}): void {
       const shift = (btnCode & 4) !== 0;
       const meta = (btnCode & 8) !== 0;
       const ctrl = (btnCode & 16) !== 0;
+      const isMotion = (btnCode & 32) !== 0;
+      const isScroll = (btnCode & 64) !== 0;
       const buttonBase = btnCode & 3;
 
-      const button: MouseEvent['button'] =
-        buttonBase === 0 ? 'left' :
-        buttonBase === 1 ? 'middle' :
-        buttonBase === 2 ? 'right' : 'none';
+      // For scroll: bit 0 determines direction (0=up, 1=down)
+      const scrollDirection: 'up' | 'down' | null = isScroll
+        ? (buttonBase & 1) === 0 ? 'up' : 'down'
+        : null;
 
-      const isMotion = (btnCode & 32) !== 0;
+      const button: MouseEvent['button'] = isScroll
+        ? 'none'
+        : buttonBase === 0 ? 'left'
+        : buttonBase === 1 ? 'middle'
+        : buttonBase === 2 ? 'right' : 'none';
+
       const isRelease = action === 'm';
 
       const event: MouseEvent = {
@@ -109,10 +119,15 @@ export function useMouse(options: UseMouseOptions = {}): void {
         shift,
         meta,
         ctrl,
-        type: isRelease ? 'release' : isMotion ? 'move' : 'press',
+        type: isScroll ? 'scroll' : isRelease ? 'release' : isMotion ? 'move' : 'press',
+        isScroll,
+        scrollDirection,
       };
 
-      if (isRelease) {
+      if (isScroll) {
+        // Scroll wheel event
+        onScroll?.(event);
+      } else if (isRelease) {
         if (dragStart.current && onDrag) {
           onDrag(dragStart.current, { x, y });
         }
@@ -136,7 +151,7 @@ export function useMouse(options: UseMouseOptions = {}): void {
       stdout.write('\x1b[?1003l'); // Disable mouse tracking
       stdout.write('\x1b[?1006l');
     };
-  }, [enabled, stdin, stdout, onClick, onMove, onRelease, onDrag]);
+  }, [enabled, stdin, stdout, onClick, onMove, onRelease, onScroll, onDrag]);
 }
 
 export interface GridMouseOptions {
@@ -145,11 +160,12 @@ export interface GridMouseOptions {
   cellHeight: number;
   onClick?: (row: number, col: number, event: MouseEvent) => void;
   onHover?: (row: number, col: number, event: MouseEvent) => void;
+  onScroll?: (direction: 'up' | 'down', row: number, col: number, event: MouseEvent) => void;
   enabled?: boolean;
 }
 
 export function useGridMouse(options: GridMouseOptions): { hoveredCell: Position | null } {
-  const { gridOffset, cellWidth, cellHeight, onClick, onHover, enabled = true } = options;
+  const { gridOffset, cellWidth, cellHeight, onClick, onHover, onScroll, enabled = true } = options;
   const [hoveredCell, setHoveredCell] = useState<Position | null>(null);
 
   const handleClick = useCallback((event: MouseEvent) => {
@@ -171,9 +187,19 @@ export function useGridMouse(options: GridMouseOptions): { hoveredCell: Position
     }
   }, [gridOffset, cellWidth, cellHeight, onHover]);
 
+  const handleScroll = useCallback((event: MouseEvent) => {
+    if (!event.scrollDirection) return;
+    const col = Math.floor((event.x - gridOffset.x) / cellWidth);
+    const row = Math.floor((event.y - gridOffset.y) / cellHeight);
+    if (col >= 0 && row >= 0) {
+      onScroll?.(event.scrollDirection, row, col, event);
+    }
+  }, [gridOffset, cellWidth, cellHeight, onScroll]);
+
   useMouse({
     onClick: handleClick,
     onMove: handleMove,
+    onScroll: handleScroll,
     enabled,
   });
 
