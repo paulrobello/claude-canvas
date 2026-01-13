@@ -23,7 +23,7 @@ import { PlaylistCanvas, type PlaylistConfig } from "./playlist";
 import { GanttCanvas, type GanttConfig } from "./gantt";
 import { GitDiffCanvas, type GitDiffConfig } from "./git-diff";
 import { OrgChartCanvas, type OrgChartConfig } from "./org-chart";
-import { Chart, type ChartConfig } from "./chart";
+import { Chart, ChartCanvas, type ChartConfig } from "./chart";
 
 // Clear screen and hide cursor
 function clearScreen() {
@@ -355,8 +355,10 @@ async function renderChart(
     series: [],
   };
   const { waitUntilExit } = render(
-    <Chart
+    <ChartCanvas
       config={config || defaultConfig}
+      socketPath={options?.socketPath}
+      scenario={options?.scenario || 'view'}
     />,
     { exitOnCtrlC: true }
   );

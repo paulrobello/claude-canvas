@@ -219,3 +219,162 @@ export async function editDocument(
     options
   );
 }
+
+// ============================================
+// Chart Canvas API
+// ============================================
+
+export interface ChartConfig {
+  title?: string;
+  chartType?: 'line' | 'bar';
+  series: Array<{
+    id: string;
+    name: string;
+    data: Array<{ x: number | string; y: number; label?: string }>;
+    color?: string;
+    type?: 'line' | 'bar';
+  }>;
+  xAxis?: { label?: string; min?: number; max?: number };
+  yAxis?: { label?: string; min?: number; max?: number };
+  renderMode?: 'braille' | 'halfblock' | 'ascii' | 'auto';
+  showGrid?: boolean;
+  showLegend?: boolean;
+}
+
+export interface LiveChartHandle {
+  update: (config: Partial<ChartConfig>) => void;
+  addDataPoint: (seriesId: string, point: { x: number | string; y: number }) => void;
+  close: () => void;
+  onClose: Promise<CanvasResult<void>>;
+}
+
+/**
+ * Display an interactive chart (view only)
+ */
+export async function displayChart(
+  config: ChartConfig,
+  options?: SpawnOptions
+): Promise<CanvasResult<void>> {
+  return spawnCanvasWithIPC("chart", "view", config, options);
+}
+
+/**
+ * Spawn a live chart that can be updated dynamically
+ * Returns a handle for sending updates
+ */
+export async function spawnLiveChart(
+  config: ChartConfig,
+  options: SpawnOptions = {}
+): Promise<LiveChartHandle> {
+  const { timeout = 300000, onReady } = options;
+  const id = `chart-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const socketPath = getSocketPath(id);
+
+  let currentConfig = { ...config };
+  let resolveClose: (result: CanvasResult<void>) => void;
+  let resolved = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let server: Awaited<ReturnType<typeof createIPCServer>> | null = null;
+
+  const closePromise = new Promise<CanvasResult<void>>((resolve) => {
+    resolveClose = resolve;
+  });
+
+  const cleanup = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    if (server) {
+      server.close();
+    }
+  };
+
+  // Create IPC server
+  server = await createIPCServer({
+    socketPath,
+    onClientConnect() {
+      // Canvas connected
+    },
+    onMessage(msg) {
+      if (resolved) return;
+
+      switch (msg.type) {
+        case "ready":
+          onReady?.();
+          break;
+        case "selected":
+        case "cancelled":
+          resolved = true;
+          cleanup();
+          resolveClose({ success: true, cancelled: msg.type === "cancelled" });
+          break;
+        case "error":
+          resolved = true;
+          cleanup();
+          resolveClose({ success: false, error: (msg as any).message });
+          break;
+      }
+    },
+    onClientDisconnect() {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolveClose({ success: true });
+      }
+    },
+    onError(error) {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolveClose({ success: false, error: error.message });
+      }
+    },
+  });
+
+  // Set timeout
+  timeoutId = setTimeout(() => {
+    if (!resolved) {
+      resolved = true;
+      server?.broadcast({ type: "close" } as any);
+      cleanup();
+      resolveClose({ success: false, error: "Timeout" });
+    }
+  }, timeout);
+
+  // Spawn the canvas
+  await spawnCanvas("chart", id, JSON.stringify(config), {
+    socketPath,
+    scenario: "live",
+  });
+
+  return {
+    update(partialConfig: Partial<ChartConfig>) {
+      if (!resolved && server) {
+        currentConfig = { ...currentConfig, ...partialConfig };
+        server.broadcast({ type: "update", config: currentConfig } as any);
+      }
+    },
+
+    addDataPoint(seriesId: string, point: { x: number | string; y: number }) {
+      if (!resolved && server) {
+        const series = currentConfig.series.find((s) => s.id === seriesId);
+        if (series) {
+          series.data.push(point);
+          server.broadcast({ type: "update", config: currentConfig } as any);
+        }
+      }
+    },
+
+    close() {
+      if (!resolved) {
+        resolved = true;
+        server?.broadcast({ type: "close" } as any);
+        cleanup();
+        resolveClose({ success: true });
+      }
+    },
+
+    onClose: closePromise,
+  };
+}

@@ -1,6 +1,6 @@
 // Viewport Hook for Pan/Zoom State Management
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { Viewport, Bounds, ChartConfig, ChartSeries, DataPoint } from '../types';
 
 const MIN_ZOOM = 0.1;
@@ -114,6 +114,44 @@ export function useViewport({ series, config }: UseViewportOptions): UseViewport
   }, [dataBounds, config]);
 
   const [viewport, setViewport] = useState<Viewport>(initialViewport);
+  const isFirstRender = useRef(true);
+  const prevDataBoundsRef = useRef<Bounds | null>(null);
+
+  // Auto-update viewport when data bounds change (for live data scenarios)
+  useEffect(() => {
+    // Skip first render - initial state is already set
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      prevDataBoundsRef.current = dataBounds;
+      return;
+    }
+
+    const prevBounds = prevDataBoundsRef.current;
+    prevDataBoundsRef.current = dataBounds;
+
+    // Only auto-update if data bounds have actually changed
+    if (prevBounds &&
+        prevBounds.minX === dataBounds.minX &&
+        prevBounds.maxX === dataBounds.maxX &&
+        prevBounds.minY === dataBounds.minY &&
+        prevBounds.maxY === dataBounds.maxY) {
+      return;
+    }
+
+    // Auto-expand viewport to include new data while preserving zoom level
+    setViewport((prev) => {
+      // Calculate the new viewport with padding
+      let bounds = config.autoBounds !== false ? addPadding(dataBounds) : dataBounds;
+      bounds = applyConfigBounds(bounds, config);
+
+      // For live data, we typically want to follow the latest data
+      // Keep the same zoom level but adjust bounds to fit all data
+      return {
+        ...bounds,
+        zoomLevel: prev.zoomLevel,
+      };
+    });
+  }, [dataBounds, config]);
 
   /**
    * Pan the viewport by a delta in data units

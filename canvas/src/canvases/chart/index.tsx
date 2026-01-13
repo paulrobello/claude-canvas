@@ -13,6 +13,7 @@ import type {
   DataPoint,
 } from './types';
 import { useViewport } from './hooks/use-viewport';
+import { useChartIpc } from './hooks/use-chart-ipc';
 import { ChartArea, YAxis, XAxis, Legend, StatusBar, CrosshairTooltip } from './components';
 import { useTerminalSize, useMouse } from '../../shared/hooks';
 import { screenToData, isTimeSeries } from './utils';
@@ -288,28 +289,22 @@ export function Chart({ config, onResult }: ChartProps): React.ReactElement {
   );
 }
 
-// Canvas wrapper component with full props
+// Canvas wrapper component with full props and IPC support
 export function ChartCanvas({
   config,
   socketPath,
   scenario,
   onResult,
 }: ChartCanvasProps): React.ReactElement {
-  const [chartConfig, setChartConfig] = useState<ChartConfig>(config);
+  // Use IPC hook for dynamic updates
+  const { config: liveConfig } = useChartIpc({
+    socketPath,
+    scenario,
+    initialConfig: config,
+    onResult,
+  });
 
-  // Handle IPC updates if socketPath is provided
-  useEffect(() => {
-    if (!socketPath) return;
-
-    // TODO: Implement IPC client for live updates
-    // For now, just use the initial config
-
-    return () => {
-      // Cleanup IPC connection
-    };
-  }, [socketPath, scenario]);
-
-  return <Chart config={chartConfig} onResult={onResult} />;
+  return <Chart config={liveConfig} onResult={onResult} />;
 }
 
 // Re-export types and components
