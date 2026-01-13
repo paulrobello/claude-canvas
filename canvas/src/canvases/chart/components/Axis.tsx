@@ -19,23 +19,27 @@ export function YAxis({
   width = 8,
   config,
 }: YAxisProps): React.ReactElement {
+  // Account for label row in height calculation
+  const hasLabel = !!config?.label;
+  const dataHeight = hasLabel ? height - 1 : height;
+
   const ticks = useMemo(() => {
-    const count = Math.min(height, config?.tickCount || 6);
+    const count = Math.min(dataHeight, config?.tickCount || 6);
     return generateTicks(viewport.minY, viewport.maxY, count);
-  }, [viewport, height, config?.tickCount]);
+  }, [viewport, dataHeight, config?.tickCount]);
 
   const format = config?.format || 'number';
 
   const lines = useMemo(() => {
     const result: React.ReactElement[] = [];
 
-    for (let y = 0; y < height; y++) {
+    for (let y = 0; y < dataHeight; y++) {
       // Map screen Y to data Y (inverted)
-      const dataY = viewport.maxY - (y / (height - 1)) * (viewport.maxY - viewport.minY);
+      const dataY = viewport.maxY - (y / Math.max(1, dataHeight - 1)) * (viewport.maxY - viewport.minY);
 
       // Find if there's a tick near this position
       const nearestTick = ticks.find((tick) => {
-        const tickY = Math.round(((viewport.maxY - tick) / (viewport.maxY - viewport.minY)) * (height - 1));
+        const tickY = Math.round(((viewport.maxY - tick) / (viewport.maxY - viewport.minY)) * Math.max(1, dataHeight - 1));
         return Math.abs(tickY - y) < 1;
       });
 
@@ -52,13 +56,13 @@ export function YAxis({
     }
 
     return result;
-  }, [viewport, height, ticks, format, width]);
+  }, [viewport, dataHeight, ticks, format, width]);
 
   return (
-    <Box flexDirection="column">
-      {config?.label && (
+    <Box flexDirection="column" height={height}>
+      {hasLabel && (
         <Box justifyContent="flex-end" width={width}>
-          <Text color="cyan" bold>{config.label.slice(0, width - 2)}</Text>
+          <Text color="cyan" bold>{config!.label!.slice(0, width - 2)}</Text>
         </Box>
       )}
       {lines}

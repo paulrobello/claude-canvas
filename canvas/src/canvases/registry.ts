@@ -158,8 +158,8 @@ export const canvasRegistry: Map<string, CanvasDefinition> = new Map([
   // Data Visualization
   ['chart', {
     id: 'chart',
-    name: 'Interactive Chart',
-    description: 'Pan/zoom chart with line and bar modes, braille/halfblock/ASCII rendering',
+    name: 'Charts',
+    description: 'Interactive charts with pan/zoom - line and bar modes, braille/halfblock/ASCII rendering',
     category: 'visualization',
     component: Chart as never,
     scenarios: ['view', 'live', 'interactive'],

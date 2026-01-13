@@ -119,7 +119,7 @@ export async function renderCanvas(
       console.log("  - playlist (creative)");
       console.log("  - git-diff (development)");
       console.log("  - agent-dashboard (AI)");
-      console.log("  - chart (data visualization)");
+      console.log("  - Charts (data visualization)");
       process.exit(1);
   }
 }

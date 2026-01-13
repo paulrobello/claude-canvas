@@ -64,7 +64,10 @@ export function Chart({ config, onResult }: ChartProps): React.ReactElement {
   // Calculate chart area dimensions
   const margins = chartConfig.margins!;
   const chartWidth = Math.max(20, termWidth - margins.left! - margins.right!);
-  const chartHeight = Math.max(10, termHeight - margins.top! - margins.bottom! - (chartConfig.showLegend ? 2 : 0) - 2);
+  // Cap chart height to keep layout compact - max 20 rows or 50% of terminal
+  const maxChartHeight = Math.min(20, Math.floor(termHeight * 0.5));
+  const availableHeight = termHeight - margins.top! - margins.bottom! - (chartConfig.showLegend ? 2 : 0) - 4;
+  const chartHeight = Math.max(8, Math.min(maxChartHeight, availableHeight));
 
   // Check if data is time series (check first series' data)
   const isTime = useMemo(() => {
@@ -228,12 +231,14 @@ export function Chart({ config, onResult }: ChartProps): React.ReactElement {
 
         {/* Chart Area */}
         <Box flexDirection="column">
+          {/* Spacer to align with Y-axis label if present */}
+          {chartConfig.yAxis?.label && <Box height={1} />}
           <ChartArea
             series={series}
             chartType={chartConfig.chartType}
             viewport={viewport}
             width={chartWidth}
-            height={chartHeight}
+            height={chartConfig.yAxis?.label ? chartHeight - 1 : chartHeight}
             renderMode={chartConfig.renderMode || 'auto'}
             showGrid={chartConfig.showGrid}
             crosshairX={showCrosshair && cursorPos ? cursorPos.x : undefined}
