@@ -1,8 +1,8 @@
 {
   "name": "claude-canvas",
   "owner": {
-    "name": "David Siegel",
-    "email": "djsiegel@gmail.com"
+    "name": "Paul Robello",
+    "email": "probello@gmail.com"
   },
   "metadata": {
     "description": "Claude Code plugin marketplace for interactive terminal TUI components"
@@ -11,8 +11,8 @@
     {
       "name": "canvas",
       "source": "./canvas",
-      "description": "Spawn and control interactive terminal displays (calendars, documents, flights) with real-time IPC communication",
-      "version": "0.1.0",
+      "description": "Spawn and control interactive terminal displays (calendars, documents, flights, charts) with real-time IPC communication",
+      "version": "0.2.0",
       "strict": false
     }
   ]

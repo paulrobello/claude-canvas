@@ -8,7 +8,7 @@ A TUI toolkit that gives Claude Code its own display. Spawn interactive terminal
 
 ## Features
 
-### 17 Canvas Types
+### 18 Canvas Types
 
 | Category | Canvas | Description |
 |----------|--------|-------------|
@@ -27,6 +27,7 @@ A TUI toolkit that gives Claude Code its own display. Spawn interactive terminal
 | **Creative** | `playlist` | Music playlist with now playing, drag reorder, shuffle |
 | **Development** | `git-diff` | Diff viewer with unified/split modes, file navigation |
 | **AI** | `agent-dashboard` | Agent monitoring with status, logs, token usage, context visualization |
+| **Data Viz** | `chart` | Interactive charts with pan/zoom, braille rendering, live updates |
 | **Calendar** | `calendar` | Calendar display, meeting picker, event CRUD with local storage |
 | **Documents** | `document` | Markdown viewer/editor with syntax highlighting, selection support |
 
@@ -187,6 +188,37 @@ Calendar edit mode supports:
 bun run src/cli.ts spawn flight --config-file test-flight.json
 ```
 
+### Interactive Chart
+
+```bash
+# Line chart with multiple series
+bun run src/cli.ts spawn chart --config '{
+  "title": "Sales Trends",
+  "chartType": "line",
+  "showGrid": true,
+  "showLegend": true,
+  "series": [
+    {"id": "revenue", "name": "Revenue", "color": "cyan", "data": [
+      {"x": 1, "y": 10}, {"x": 2, "y": 25}, {"x": 3, "y": 15}, {"x": 4, "y": 30}
+    ]},
+    {"id": "costs", "name": "Costs", "color": "magenta", "data": [
+      {"x": 1, "y": 5}, {"x": 2, "y": 12}, {"x": 3, "y": 8}, {"x": 4, "y": 18}
+    ]}
+  ]
+}'
+
+# Bar chart
+bun run src/cli.ts spawn chart --config '{
+  "title": "Quarterly Results",
+  "chartType": "bar",
+  "series": [{"id": "q1", "name": "Q1", "data": [
+    {"x": "Jan", "y": 100}, {"x": "Feb", "y": 150}, {"x": "Mar", "y": 120}
+  ]}]
+}'
+```
+
+Chart features: pan/zoom with arrow keys and +/-, braille rendering for high resolution, live data updates via IPC.
+
 ## Keyboard Shortcuts
 
 Common shortcuts across all canvases:
@@ -205,6 +237,7 @@ Canvas-specific shortcuts:
 - **Calendar**: `←→` week, `t` today, `c` create, `e` edit, `d` delete
 - **Kanban**: `Space` drag card, `Enter` move to next column
 - **Flight**: `Tab` switch flight list/seatmap focus
+- **Chart**: `+/-` zoom, `r` reset, `f` fit to data, `c` crosshair
 
 ## Windows Setup
 
@@ -283,6 +316,7 @@ canvas/
 │   ├── terminal.ts         # Terminal detection, spawning, capture
 │   ├── canvases/           # Canvas components (React/Ink)
 │   │   ├── calendar/       # Calendar with CRUD
+│   │   ├── chart/          # Interactive charts with pan/zoom
 │   │   ├── document/       # Markdown editor
 │   │   ├── flight/         # Flight booking
 │   │   ├── kanban/         # Kanban board
