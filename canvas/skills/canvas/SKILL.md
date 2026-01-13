@@ -361,6 +361,76 @@ Interactive canvases communicate via Unix domain sockets.
 { type: "ping" }            // Health check
 ```
 
+## Terminal Vision (Capture Canvas Output)
+
+Claude can "see" what's rendered in the canvas pane using `tmux capture-pane`. This enables iterative development without requiring user screenshots.
+
+### Workflow
+
+1. **Push config** → Canvas renders in tmux pane
+2. **Capture output** → Claude sees the rendered result
+3. **Iterate** → Claude fixes layout/rendering issues
+
+### CLI Commands
+
+```bash
+# Capture current canvas pane output
+bun run src/cli.ts capture
+
+# Capture with options
+bun run src/cli.ts capture --history    # Include scrollback
+bun run src/cli.ts capture --escape     # Include ANSI colors
+bun run src/cli.ts capture --json       # Output as JSON with metadata
+
+# Get canvas pane ID
+bun run src/cli.ts pane-id
+```
+
+### Example Usage
+
+```bash
+# 1. Spawn a canvas
+bun run src/cli.ts spawn dashboard --config '{"widgets": [...]}'
+
+# 2. Capture what's rendered
+bun run src/cli.ts capture
+
+# Output shows the terminal content including box-drawing chars:
+# ┌─────────────────────────────────────┐
+# │  Dashboard                          │
+# ├─────────────────────────────────────┤
+# │  Revenue: $125,000  ↑12%           │
+# └─────────────────────────────────────┘
+```
+
+### Iterating on Layout
+
+When capture shows rendering issues:
+
+1. **Identify the problem** from captured text (misaligned boxes, truncated content, etc.)
+2. **Update the config** with fixes
+3. **Send update** via IPC: `bun run src/cli.ts update <id> --config '{...}'`
+4. **Capture again** to verify the fix
+
+### JSON Output Mode
+
+Use `--json` for structured output:
+
+```json
+{
+  "success": true,
+  "paneId": "%42",
+  "content": "┌────────────...",
+  "lines": 24
+}
+```
+
+### Limitations
+
+- **Unix/macOS only**: Requires tmux (not available on Windows)
+- **Text only**: Captures terminal text, not pixel-perfect rendering
+- **No mouse state**: Cannot capture hover/selection states
+
 ## Requirements
 
 - **tmux**: Canvas spawning requires a tmux session

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { program } from "commander";
-import { detectTerminal, spawnCanvas, getTerminalInfo } from "./terminal";
+import { detectTerminal, spawnCanvas, getTerminalInfo, captureCanvasPane, getCurrentCanvasPaneId } from "./terminal";
 import { isWindows, getSocketPath, getPortFilePath } from "./ipc/types";
 import { existsSync } from "node:fs";
 
@@ -104,6 +104,50 @@ program
     }
 
     console.log(`\nSummary: ${env.summary}`);
+  });
+
+program
+  .command("capture")
+  .description("Capture the canvas pane output (terminal vision)")
+  .option("--pane <id>", "Specific tmux pane ID to capture")
+  .option("--history", "Include scrollback history")
+  .option("--escape", "Include ANSI escape sequences (colors)")
+  .option("--json", "Output as JSON with metadata")
+  .action(async (options) => {
+    const result = await captureCanvasPane({
+      paneId: options.pane,
+      history: options.history,
+      escape: options.escape,
+    });
+
+    if (!result.success) {
+      console.error(`Error: ${result.error}`);
+      process.exit(1);
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        success: true,
+        paneId: result.paneId,
+        content: result.content,
+        lines: result.content?.split("\n").length || 0,
+      }, null, 2));
+    } else {
+      console.log(result.content);
+    }
+  });
+
+program
+  .command("pane-id")
+  .description("Get the current canvas pane ID")
+  .action(async () => {
+    const paneId = await getCurrentCanvasPaneId();
+    if (paneId) {
+      console.log(paneId);
+    } else {
+      console.error("No canvas pane found");
+      process.exit(1);
+    }
   });
 
 program

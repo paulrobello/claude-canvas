@@ -402,3 +402,106 @@ export function getTerminalInfo(): {
     };
   }
 }
+
+// ============================================
+// Terminal Vision - Capture Canvas Output
+// ============================================
+
+export interface CaptureResult {
+  success: boolean;
+  content?: string;
+  error?: string;
+  paneId?: string;
+}
+
+/**
+ * Capture the current canvas pane output using tmux capture-pane.
+ * This allows Claude to "see" what's rendered in the canvas and iterate.
+ *
+ * @param options.paneId - Specific pane ID to capture (optional, uses saved pane ID if not provided)
+ * @param options.history - Include scrollback history (default: false)
+ * @param options.escape - Include escape sequences for colors (default: false)
+ * @returns The captured terminal content as text
+ */
+export async function captureCanvasPane(options?: {
+  paneId?: string;
+  history?: boolean;
+  escape?: boolean;
+}): Promise<CaptureResult> {
+  if (isWindows) {
+    return {
+      success: false,
+      error: "Terminal capture is only supported on Unix/macOS with tmux",
+    };
+  }
+
+  const env = detectTerminal();
+  if (!env.inTmux) {
+    return {
+      success: false,
+      error: "Terminal capture requires tmux. Please run inside a tmux session.",
+    };
+  }
+
+  // Get pane ID - use provided or look up saved canvas pane
+  let paneId = options?.paneId;
+  if (!paneId) {
+    paneId = await getCanvasPaneId();
+    if (!paneId) {
+      return {
+        success: false,
+        error: "No canvas pane found. Spawn a canvas first with 'spawn' command.",
+      };
+    }
+  }
+
+  try {
+    // Build tmux capture-pane command
+    const args = ["capture-pane", "-t", paneId, "-p"];
+
+    // -J joins wrapped lines
+    args.push("-J");
+
+    // Include scrollback history if requested
+    if (options?.history) {
+      args.push("-S", "-"); // Start from beginning of history
+    }
+
+    // Include escape sequences if requested (for colors)
+    if (options?.escape) {
+      args.push("-e");
+    }
+
+    const result = spawnSync("tmux", args);
+
+    if (result.status !== 0) {
+      const stderr = result.stderr?.toString().trim();
+      return {
+        success: false,
+        error: `tmux capture-pane failed: ${stderr || "unknown error"}`,
+        paneId,
+      };
+    }
+
+    const content = result.stdout?.toString() || "";
+
+    return {
+      success: true,
+      content,
+      paneId,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: `Failed to capture pane: ${err instanceof Error ? err.message : String(err)}`,
+      paneId,
+    };
+  }
+}
+
+/**
+ * Get the ID of the current canvas pane (if one exists)
+ */
+export async function getCurrentCanvasPaneId(): Promise<string | null> {
+  return getCanvasPaneId();
+}
