@@ -6,7 +6,7 @@ export interface CanvasDefinition {
   id: string;
   name: string;
   description: string;
-  category: 'business' | 'travel' | 'personal' | 'creative' | 'development' | 'ai';
+  category: 'business' | 'travel' | 'personal' | 'creative' | 'development' | 'ai' | 'visualization';
   component: React.ComponentType<{ config: unknown; onResult?: (result: unknown) => void }>;
   defaultConfig?: unknown;
   scenarios?: string[];
@@ -27,6 +27,7 @@ import { PlaylistCanvas } from './playlist';
 import { GanttCanvas } from './gantt';
 import { GitDiffCanvas } from './git-diff';
 import { OrgChartCanvas } from './org-chart';
+import { Chart } from './chart';
 
 // Registry of all available canvases
 export const canvasRegistry: Map<string, CanvasDefinition> = new Map([
@@ -152,6 +153,16 @@ export const canvasRegistry: Map<string, CanvasDefinition> = new Map([
     category: 'ai',
     component: AgentDashboard as never,
     scenarios: ['monitor', 'manage', 'logs'],
+  }],
+
+  // Data Visualization
+  ['chart', {
+    id: 'chart',
+    name: 'Interactive Chart',
+    description: 'Pan/zoom chart with line and bar modes, braille/halfblock/ASCII rendering',
+    category: 'visualization',
+    component: Chart as never,
+    scenarios: ['view', 'live', 'interactive'],
   }],
 ]);
 

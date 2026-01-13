@@ -2,7 +2,7 @@
 name: canvas
 description: |
   **The primary skill for terminal TUI components.** Covers spawning, controlling, and interacting with terminal canvases.
-  Use when displaying calendars, documents, flights, kanban boards, dashboards, invoices, budgets, hotels, itineraries, smart home controls, agent dashboards, workouts, playlists, gantt charts, git diffs, org charts, or sales pipelines.
+  Use when displaying calendars, documents, flights, kanban boards, dashboards, invoices, budgets, hotels, itineraries, smart home controls, agent dashboards, workouts, playlists, gantt charts, git diffs, org charts, sales pipelines, or interactive charts.
 ---
 
 # Canvas TUI Toolkit
@@ -41,6 +41,12 @@ Try asking Claude things like:
 
 **AI:**
 - "Show agent dashboard"
+
+**Data Visualization:**
+- "Plot these sales numbers as a line chart"
+- "Show a bar chart comparing quarterly revenue"
+- "Display this time series data with pan/zoom"
+- "Create a chart from this CSV data"
 
 ## Overview
 
@@ -92,6 +98,12 @@ Canvas provides interactive terminal displays (TUIs) that Claude can spawn and c
 | Canvas | Purpose | Key Features |
 |--------|---------|--------------|
 | `agent-dashboard` | Agent monitoring | Status, progress, logs, token usage, context viz |
+
+### Data Visualization Canvases
+
+| Canvas | Purpose | Key Features |
+|--------|---------|--------------|
+| `chart` | Interactive charts | Line/bar charts, pan/zoom, braille/halfblock/ASCII rendering, multiple series, crosshair, time series support |
 
 ### Original Canvases
 
@@ -314,6 +326,77 @@ bun run src/cli.ts show org-chart --config '{
   }
 }'
 ```
+
+### Interactive Chart
+```bash
+# Line chart with multiple series
+bun run src/cli.ts show chart --config '{
+  "title": "Sales Trends",
+  "chartType": "line",
+  "showGrid": true,
+  "showLegend": true,
+  "series": [
+    {"id": "revenue", "name": "Revenue", "color": "cyan", "data": [
+      {"x": 1, "y": 10}, {"x": 2, "y": 25}, {"x": 3, "y": 15}, {"x": 4, "y": 30}, {"x": 5, "y": 45}
+    ]},
+    {"id": "costs", "name": "Costs", "color": "magenta", "data": [
+      {"x": 1, "y": 5}, {"x": 2, "y": 12}, {"x": 3, "y": 8}, {"x": 4, "y": 18}, {"x": 5, "y": 22}
+    ]}
+  ]
+}'
+
+# Bar chart
+bun run src/cli.ts show chart --config '{
+  "title": "Quarterly Results",
+  "chartType": "bar",
+  "showLegend": true,
+  "series": [
+    {"id": "q1", "name": "Q1", "color": "blue", "data": [
+      {"x": "Jan", "y": 100}, {"x": "Feb", "y": 150}, {"x": "Mar", "y": 120}
+    ]},
+    {"id": "q2", "name": "Q2", "color": "green", "data": [
+      {"x": "Jan", "y": 110}, {"x": "Feb", "y": 140}, {"x": "Mar", "y": 160}
+    ]}
+  ]
+}'
+
+# Time series chart with ISO dates
+bun run src/cli.ts show chart --config '{
+  "title": "CPU Usage Over Time",
+  "chartType": "line",
+  "crosshair": true,
+  "xAxis": {"format": "datetime"},
+  "series": [
+    {"id": "cpu", "name": "CPU %", "data": [
+      {"x": "2024-01-15T10:00:00Z", "y": 45},
+      {"x": "2024-01-15T10:05:00Z", "y": 62},
+      {"x": "2024-01-15T10:10:00Z", "y": 55},
+      {"x": "2024-01-15T10:15:00Z", "y": 78}
+    ]}
+  ]
+}'
+```
+
+**Chart Keyboard Shortcuts:**
+
+| Key | Action |
+|-----|--------|
+| `←→↑↓` | Pan viewport |
+| `+` / `=` | Zoom in |
+| `-` | Zoom out |
+| `0` / `r` | Reset zoom |
+| `f` | Fit to data |
+| `c` | Toggle crosshair |
+| `q` / `ESC` | Exit |
+
+**Chart Configuration Options:**
+- `chartType`: `"line"` or `"bar"`
+- `renderMode`: `"braille"` (highest resolution), `"halfblock"`, `"ascii"`, or `"auto"` (default)
+- `scale`: `"linear"` or `"log"`
+- `crosshair`: Enable cursor tracking with data display
+- `showGrid`: Display grid lines
+- `showLegend`: Display series legend
+- `xAxis/yAxis`: Configure labels, format, tick count
 
 ## Keyboard Shortcuts
 

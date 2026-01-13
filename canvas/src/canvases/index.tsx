@@ -23,6 +23,7 @@ import { PlaylistCanvas, type PlaylistConfig } from "./playlist";
 import { GanttCanvas, type GanttConfig } from "./gantt";
 import { GitDiffCanvas, type GitDiffConfig } from "./git-diff";
 import { OrgChartCanvas, type OrgChartConfig } from "./org-chart";
+import { Chart, type ChartConfig } from "./chart";
 
 // Clear screen and hide cursor
 function clearScreen() {
@@ -104,6 +105,10 @@ export async function renderCanvas(
     case "agent-dashboard":
       return renderAgentDashboard(id, config as AgentDashboardConfig | undefined, options);
 
+    // Data visualization canvases
+    case "chart":
+      return renderChart(id, config as ChartConfig | undefined, options);
+
     default:
       console.error(`Unknown canvas kind: ${kind}`);
       console.log("\nAvailable canvases:");
@@ -114,6 +119,7 @@ export async function renderCanvas(
       console.log("  - playlist (creative)");
       console.log("  - git-diff (development)");
       console.log("  - agent-dashboard (AI)");
+      console.log("  - chart (data visualization)");
       process.exit(1);
   }
 }
@@ -339,6 +345,24 @@ async function renderAgentDashboard(
   await waitUntilExit();
 }
 
+async function renderChart(
+  id: string,
+  config?: ChartConfig,
+  options?: RenderOptions
+): Promise<void> {
+  const defaultConfig: ChartConfig = {
+    chartType: 'line',
+    series: [],
+  };
+  const { waitUntilExit } = render(
+    <Chart
+      config={config || defaultConfig}
+    />,
+    { exitOnCtrlC: true }
+  );
+  await waitUntilExit();
+}
+
 // Re-export for direct imports
 export { Calendar } from "./calendar";
 export { Document } from "./document";
@@ -357,3 +381,4 @@ export { PlaylistCanvas } from "./playlist";
 export { GanttCanvas } from "./gantt";
 export { GitDiffCanvas } from "./git-diff";
 export { OrgChartCanvas } from "./org-chart";
+export { Chart } from "./chart";
