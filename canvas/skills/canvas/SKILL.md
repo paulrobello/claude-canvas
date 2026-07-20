@@ -120,7 +120,7 @@ cd ${CLAUDE_PLUGIN_ROOT}
 # Run canvas in current terminal
 bun run src/cli.ts show kanban --config '{"columns": [{"id": "todo", "title": "To Do", "cards": []}]}'
 
-# Spawn canvas in new tmux split
+# Spawn canvas in new split pane (herdr or tmux)
 bun run src/cli.ts spawn dashboard --config '{"widgets": [...]}'
 ```
 
@@ -413,7 +413,7 @@ Common shortcuts across all canvases:
 
 ## Spawning Canvases
 
-**Always use `spawn` for interactive scenarios** - this opens the canvas in a tmux split pane while keeping the conversation terminal available.
+**Always use `spawn` for interactive scenarios** - this opens the canvas in a split pane (herdr or tmux) while keeping the conversation terminal available.
 
 ```bash
 bun run src/cli.ts spawn [kind] --config '[json]'
@@ -446,11 +446,11 @@ Interactive canvases communicate via Unix domain sockets.
 
 ## Terminal Vision (Capture Canvas Output)
 
-Claude can "see" what's rendered in the canvas pane using `tmux capture-pane`. This enables iterative development without requiring user screenshots.
+Claude can "see" what's rendered in the canvas pane using `herdr pane read` (herdr) or `tmux capture-pane` (tmux). This enables iterative development without requiring user screenshots.
 
 ### Workflow
 
-1. **Push config** → Canvas renders in tmux pane
+1. **Push config** → Canvas renders in split pane
 2. **Capture output** → Claude sees the rendered result
 3. **Iterate** → Claude fixes layout/rendering issues
 
@@ -510,12 +510,12 @@ Use `--json` for structured output:
 
 ### Limitations
 
-- **Unix/macOS only**: Requires tmux (not available on Windows)
+- **Unix/macOS only**: Requires herdr or tmux (not available on Windows)
 - **Text only**: Captures terminal text, not pixel-perfect rendering
 - **No mouse state**: Cannot capture hover/selection states
 
 ## Requirements
 
-- **tmux**: Canvas spawning requires a tmux session
+- **herdr** or **tmux**: Canvas spawning requires a herdr or tmux session (herdr preferred)
 - **Terminal with mouse support**: For click-based interactions
 - **Bun**: Runtime for executing canvas commands

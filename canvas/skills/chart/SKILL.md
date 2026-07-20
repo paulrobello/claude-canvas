@@ -208,6 +208,6 @@ For time-based data, use ISO date strings:
 
 ## Requirements
 
-- **tmux**: For spawning in split pane
+- **herdr** or **tmux**: For spawning in split pane
 - **Terminal with Unicode support**: For braille/halfblock rendering
 - **Bun**: Runtime for executing commands

@@ -51,7 +51,7 @@ Reusable components for building new canvases:
 
 ### macOS / Linux
 - [Bun](https://bun.sh) - Runtime for canvas tools
-- [tmux](https://github.com/tmux/tmux) - Canvases spawn in split panes
+- [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux) - Canvases spawn in split panes (herdr preferred)
 
 ### Windows
 - [Bun](https://bun.sh) - Runtime for canvas tools
@@ -79,7 +79,7 @@ cd canvas
 # Show a canvas in current terminal
 bun run src/cli.ts show kanban --config '{"columns": [...]}'
 
-# Spawn in new tmux split pane (recommended)
+# Spawn in new split pane (herdr or tmux)
 bun run src/cli.ts spawn dashboard --config '{"widgets": [...]}'
 
 # Check terminal environment
@@ -91,7 +91,7 @@ bun run src/cli.ts env
 | Command | Description |
 |---------|-------------|
 | `show [kind]` | Render canvas in current terminal |
-| `spawn [kind]` | Spawn canvas in new tmux/WT pane |
+| `spawn [kind]` | Spawn canvas in new herdr/tmux/WT pane |
 | `capture` | Capture canvas pane output (Terminal Vision) |
 | `pane-id` | Get current canvas pane ID |
 | `update <id>` | Send config update via IPC |
@@ -264,7 +264,7 @@ Canvas-specific shortcuts:
 
 ## Windows Setup
 
-Windows support uses Windows Terminal for split panes instead of tmux.
+On macOS/Linux, canvases spawn in herdr (preferred) or tmux split panes. Windows support uses Windows Terminal for split panes.
 
 ### Install Bun
 

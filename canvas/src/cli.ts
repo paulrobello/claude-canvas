@@ -116,6 +116,8 @@ program
       console.log(`  In Windows Terminal: ${env.inWindowsTerminal}`);
       console.log(`  WT_SESSION: ${process.env.WT_SESSION || "(not set)"}`);
     } else {
+      console.log(`  In herdr: ${env.inHerdr}`);
+      console.log(`  HERDR_ENV: ${process.env.HERDR_ENV || "(not set)"}`);
       console.log(`  In tmux: ${env.inTmux}`);
       console.log(`  TMUX: ${process.env.TMUX || "(not set)"}`);
     }
@@ -126,7 +128,7 @@ program
 program
   .command("capture")
   .description("Capture the canvas pane output (terminal vision)")
-  .option("--pane <id>", "Specific tmux pane ID to capture")
+  .option("--pane <id>", "Specific pane ID to capture (herdr or tmux)")
   .option("--history", "Include scrollback history")
   .option("--escape", "Include ANSI escape sequences (colors)")
   .option("--json", "Output as JSON with metadata")

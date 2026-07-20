@@ -110,9 +110,9 @@ bun --hot ./index.ts
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
-## tmux
+## Terminal panes (herdr / tmux)
 
-- **NEVER kill the top-level tmux session or pane** - Claude is running in it
-- Use `tmux split-window` to spawn canvases in new panes
-- Use `tmux kill-pane -t <pane-id>` to kill spawned canvas panes (not pane %0)
-- Check pane IDs with `tmux list-panes` before killing
+- **NEVER kill the top-level session or the pane Claude is running in** (herdr workspace/tab/pane or tmux session/pane %0)
+- The `spawn` command auto-detects herdr (preferred, via `HERDR_ENV`) vs tmux (via `TMUX`) — no manual split needed
+- For manual cleanup of a spawned canvas pane: `herdr pane close <id>` or `tmux kill-pane -t <id>`
+- The canvas pane id is stored at `/tmp/claude-canvas-pane-id` (verify with `herdr pane get` or `tmux display-message`)

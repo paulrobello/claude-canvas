@@ -1,6 +1,6 @@
 # Architecture
 
-Claude Canvas is a TUI toolkit that provides Claude Code with its own display through interactive terminal interfaces spawned in tmux panes.
+Claude Canvas is a TUI toolkit that provides Claude Code with its own display through interactive terminal interfaces spawned in herdr or tmux panes.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ Claude Canvas is a TUI toolkit that provides Claude Code with its own display th
 
 **Key Architectural Principles:**
 
-- Cross-platform support (macOS/Linux via tmux, Windows via Windows Terminal)
+- Cross-platform support (macOS/Linux via herdr or tmux, Windows via Windows Terminal)
 - Real-time bidirectional communication via IPC sockets
 - React/Ink-based rendering for composable TUI components
 - Scenario-based interaction modes for different use cases
@@ -54,15 +54,15 @@ graph TB
     end
 
     subgraph "Terminal Multiplexer"
-        tmux[tmux / Windows Terminal]
+        herdr_tmux[herdr / tmux / Windows Terminal]
         Pane[Canvas Pane]
     end
 
     Skill --> API
     API --> CLI
     CLI --> Terminal
-    Terminal --> tmux
-    tmux --> Pane
+    Terminal --> herdr_tmux
+    herdr_tmux --> Pane
     Pane --> Renderer
     Renderer --> Component
     Component --> Shared
@@ -79,7 +79,7 @@ graph TB
     style IPC fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style Scenarios fill:#880e4f,stroke:#c2185b,stroke-width:2px,color:#ffffff
     style Shared fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
-    style tmux fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style herdr_tmux fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style Pane fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style IPC_Hook fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
 ```
@@ -93,7 +93,7 @@ The CLI (`cli.ts`) serves as the command dispatcher, handling canvas spawning, d
 | Command | Purpose |
 |---------|---------|
 | `show [kind]` | Render canvas in current terminal |
-| `spawn [kind]` | Spawn canvas in new tmux/WT pane |
+| `spawn [kind]` | Spawn canvas in new herdr/tmux/WT pane |
 | `capture` | Capture canvas pane output (Terminal Vision) |
 | `update <id>` | Send config update via IPC |
 | `selection <id>` | Get selection from document canvas |
@@ -142,14 +142,14 @@ graph TD
     Detect[detectTerminal]
     Unix[spawnCanvasUnix]
     Windows[spawnCanvasWindows]
-    tmux[tmux split-pane]
+    herdr_tmux[herdr pane split / tmux split-pane]
     WT[Windows Terminal sp]
     CMD[cmd window]
 
     Spawn --> Detect
     Detect -->|Unix/macOS| Unix
     Detect -->|Windows| Windows
-    Unix --> tmux
+    Unix --> herdr_tmux
     Windows -->|WT_SESSION| WT
     Windows -->|No WT| CMD
 
@@ -157,7 +157,7 @@ graph TD
     style Detect fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style Unix fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style Windows fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style tmux fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
+    style herdr_tmux fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style WT fill:#ff6f00,stroke:#ffa726,stroke-width:2px,color:#ffffff
     style CMD fill:#37474f,stroke:#78909c,stroke-width:2px,color:#ffffff
 ```
@@ -165,7 +165,7 @@ graph TD
 **Key Features:**
 
 - **Pane Reuse**: Tracks canvas pane ID to reuse existing panes instead of creating new splits
-- **Terminal Vision**: Captures canvas output via `tmux capture-pane` for AI feedback loops
+- **Terminal Vision**: Captures canvas output via `herdr pane read` (herdr) or `tmux capture-pane` (tmux) for AI feedback loops
 - **Cross-Platform**: Unix sockets on macOS/Linux, TCP on Windows
 
 ### Canvas Renderer
@@ -214,7 +214,7 @@ The IPC system enables bidirectional communication between Claude Code and canva
 graph LR
     subgraph "macOS / Linux"
         Bun1[Bun Runtime]
-        tmux1[tmux]
+        herdr_tmux1[herdr / tmux]
         Unix[Unix Socket]
     end
 
@@ -225,7 +225,7 @@ graph LR
     end
 
     style Bun1 fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
-    style tmux1 fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
+    style herdr_tmux1 fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
     style Unix fill:#4a148c,stroke:#9c27b0,stroke-width:2px,color:#ffffff
     style Bun2 fill:#1b5e20,stroke:#4caf50,stroke-width:2px,color:#ffffff
     style WT fill:#0d47a1,stroke:#2196f3,stroke-width:2px,color:#ffffff
@@ -235,15 +235,16 @@ graph LR
 | Requirement | macOS/Linux | Windows |
 |-------------|-------------|---------|
 | Runtime | Bun | Bun |
-| Multiplexer | tmux | Windows Terminal |
+| Multiplexer | herdr or tmux | Windows Terminal |
 | IPC Transport | Unix socket | TCP (localhost) |
-| Pane Splitting | `tmux split-window` | `wt.exe sp` |
+| Pane Splitting | `herdr pane split` / `tmux split-window` | `wt.exe sp` |
 
 ### Environment Detection
 
 ```typescript
 interface TerminalEnvironment {
-  inTmux: boolean;           // TMUX env var present
+  inHerdr: boolean;           // HERDR_ENV env var present
+  inTmux: boolean;            // TMUX env var present
   inWindowsTerminal: boolean; // WT_SESSION env var present
   platform: "windows" | "unix";
   summary: string;           // Human-readable description
@@ -491,7 +492,7 @@ stateDiagram-v2
     note right of Init
         Terminal detection
         Socket path allocation
-        tmux pane creation
+        herdr/tmux pane creation
     end note
 
     note right of Interactive
@@ -559,7 +560,7 @@ graph LR
 **Terminal Vision** enables Claude to "see" canvas output without user screenshots:
 
 1. **Push config** to canvas via IPC
-2. **Capture output** using `tmux capture-pane`
+2. **Capture output** using `herdr pane read` / `tmux capture-pane`
 3. **Analyze** the rendered text for issues
 4. **Update config** to fix layout problems
 5. **Repeat** until rendering is correct

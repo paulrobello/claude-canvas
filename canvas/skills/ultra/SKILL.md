@@ -254,7 +254,7 @@ Claude: [Spawns budget canvas with your categories]
 
 ## Requirements
 
-- **tmux** - Required for canvas display
+- **herdr** or **tmux** - Required for canvas display (herdr preferred)
 - **Bun** - Runtime for the plugin
 
 ## Development

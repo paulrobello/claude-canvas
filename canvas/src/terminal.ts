@@ -6,6 +6,7 @@ import { isWindows, getSocketPath, getTempFilePath } from "./ipc/types";
 
 export interface TerminalEnvironment {
   inTmux: boolean;
+  inHerdr: boolean;
   inWindowsTerminal: boolean;
   platform: "windows" | "unix";
   summary: string;
@@ -13,17 +14,22 @@ export interface TerminalEnvironment {
 
 export function detectTerminal(): TerminalEnvironment {
   const inTmux = !!process.env.TMUX;
+  const inHerdr = !!process.env.HERDR_ENV;
   const inWindowsTerminal = !!process.env.WT_SESSION;
   const platform = isWindows ? "windows" : "unix";
 
   let summary: string;
   if (isWindows) {
     summary = inWindowsTerminal ? "Windows Terminal" : "Windows (no WT)";
+  } else if (inHerdr) {
+    summary = "herdr";
+  } else if (inTmux) {
+    summary = "tmux";
   } else {
-    summary = inTmux ? "tmux" : "no tmux";
+    summary = "no herdr/tmux";
   }
 
-  return { inTmux, inWindowsTerminal, platform, summary };
+  return { inTmux, inHerdr, inWindowsTerminal, platform, summary };
 }
 
 export interface SpawnResult {
@@ -62,8 +68,8 @@ async function spawnCanvasUnix(
   options?: SpawnOptions,
   env?: TerminalEnvironment
 ): Promise<SpawnResult> {
-  if (!env?.inTmux) {
-    throw new Error("Canvas requires tmux on Unix/macOS. Please run inside a tmux session.");
+  if (!env?.inHerdr && !env?.inTmux) {
+    throw new Error("Canvas requires herdr or tmux on Unix/macOS. Please run inside a herdr or tmux session.");
   }
 
   // Get the directory of this script (skill directory)
@@ -86,25 +92,49 @@ async function spawnCanvasUnix(
     command += ` --scenario ${options.scenario}`;
   }
 
-  const result = await spawnTmux(command);
-  if (result) return { method: "tmux" };
+  const useHerdr = !!env?.inHerdr;
+  const result = useHerdr ? await spawnHerdr(command) : await spawnTmux(command);
+  if (result) return { method: useHerdr ? "herdr" : "tmux" };
 
-  throw new Error("Failed to spawn tmux pane");
+  throw new Error(`Failed to spawn ${useHerdr ? "herdr" : "tmux"} pane`);
 }
 
 // File to track the canvas pane ID (Unix)
 const CANVAS_PANE_FILE_UNIX = "/tmp/claude-canvas-pane-id";
+
+// Verify a tmux pane still exists: display-message round-trips the pane id,
+// so it matches only if the pane is alive.
+function tmuxPaneExists(paneId: string): boolean {
+  const result = spawnSync("tmux", ["display-message", "-t", paneId, "-p", "#{pane_id}"]);
+  const output = result.stdout?.toString().trim();
+  return result.status === 0 && output === paneId;
+}
+
+// Verify a herdr pane still exists. herdr returns exit 0 even for a missing
+// pane, so existence is decided by the JSON body (result.pane present, no error).
+function herdrPaneExists(paneId: string): boolean {
+  const result = spawnSync("herdr", ["pane", "get", paneId]);
+  try {
+    const parsed = JSON.parse(result.stdout?.toString() ?? "");
+    return !!parsed?.result?.pane?.pane_id && !parsed?.error;
+  } catch {
+    return false;
+  }
+}
 
 async function getCanvasPaneId(): Promise<string | null> {
   try {
     const file = Bun.file(CANVAS_PANE_FILE_UNIX);
     if (await file.exists()) {
       const paneId = (await file.text()).trim();
-      // Verify the pane still exists by checking if tmux can find it
-      const result = spawnSync("tmux", ["display-message", "-t", paneId, "-p", "#{pane_id}"]);
-      const output = result.stdout?.toString().trim();
-      // Pane exists only if command succeeds AND returns the same pane ID
-      if (result.status === 0 && output === paneId) {
+      if (!paneId) return null;
+      const env = detectTerminal();
+      const exists = env.inHerdr
+        ? herdrPaneExists(paneId)
+        : env.inTmux
+          ? tmuxPaneExists(paneId)
+          : false;
+      if (exists) {
         return paneId;
       }
       // Stale pane reference - clean up the file
@@ -175,6 +205,79 @@ async function spawnTmux(command: string): Promise<boolean> {
 
   // Create a new split pane
   return createNewPane(command);
+}
+
+// ============================================
+// Unix/macOS Implementation (herdr)
+// ============================================
+
+// Split the pane this controller runs in to the right and return the new pane
+// id, or null on failure. Canvas takes 67% of the width (mirrors tmux -h -p 67).
+function herdrSplitPane(): string | null {
+  const args = ["pane", "split"];
+  // Split from the pane running this controller (HERDR_PANE_ID); fall back to focused.
+  if (process.env.HERDR_PANE_ID) {
+    args.push(process.env.HERDR_PANE_ID);
+  } else {
+    args.push("--current");
+  }
+  args.push("--direction", "right", "--ratio", "0.67", "--no-focus");
+  const result = spawnSync("herdr", args);
+  try {
+    const parsed = JSON.parse(result.stdout?.toString() ?? "");
+    const id = parsed?.result?.pane?.pane_id;
+    return typeof id === "string" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+async function herdrCreatePane(command: string): Promise<boolean> {
+  const newPane = herdrSplitPane();
+  if (!newPane) return false;
+  // pane run is non-blocking (fire-and-forget), so the long-running canvas
+  // keeps running in the new pane after this call returns.
+  return new Promise((resolve) => {
+    const proc = spawn("herdr", ["pane", "run", newPane, command]);
+    proc.on("close", async (code) => {
+      if (code === 0) await saveCanvasPaneId(newPane);
+      resolve(code === 0);
+    });
+    proc.on("error", () => resolve(false));
+  });
+}
+
+async function herdrReusePane(paneId: string, command: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Interrupt any running process in the existing canvas pane
+    const killProc = spawn("herdr", ["pane", "send-keys", paneId, "C-c"]);
+    killProc.on("close", () => {
+      // Wait for the process to terminate before re-running
+      setTimeout(() => {
+        // pane run sends the text + Enter, so clear + launch in one step
+        const proc = spawn("herdr", ["pane", "run", paneId, `clear && ${command}`]);
+        proc.on("close", (code) => resolve(code === 0));
+        proc.on("error", () => resolve(false));
+      }, 150);
+    });
+    killProc.on("error", () => resolve(false));
+  });
+}
+
+async function spawnHerdr(command: string): Promise<boolean> {
+  // Check if we have an existing canvas pane to reuse
+  const existingPaneId = await getCanvasPaneId();
+
+  if (existingPaneId) {
+    const reused = await herdrReusePane(existingPaneId, command);
+    if (reused) {
+      return true;
+    }
+    // Reuse failed (pane may have been closed) - clear stale reference and create new
+    await Bun.write(CANVAS_PANE_FILE_UNIX, "");
+  }
+
+  return herdrCreatePane(command);
 }
 
 // ============================================
@@ -397,8 +500,8 @@ export function getTerminalInfo(): {
   } else {
     return {
       platform: "unix",
-      terminal: env.inTmux ? "tmux" : "standard terminal",
-      canSplit: env.inTmux,
+      terminal: env.inHerdr ? "herdr" : env.inTmux ? "tmux" : "standard terminal",
+      canSplit: env.inHerdr || env.inTmux,
     };
   }
 }
@@ -431,15 +534,15 @@ export async function captureCanvasPane(options?: {
   if (isWindows) {
     return {
       success: false,
-      error: "Terminal capture is only supported on Unix/macOS with tmux",
+      error: "Terminal capture is only supported on Unix/macOS with herdr or tmux",
     };
   }
 
   const env = detectTerminal();
-  if (!env.inTmux) {
+  if (!env.inHerdr && !env.inTmux) {
     return {
       success: false,
-      error: "Terminal capture requires tmux. Please run inside a tmux session.",
+      error: "Terminal capture requires herdr or tmux. Please run inside a herdr or tmux session.",
     };
   }
 
@@ -456,6 +559,34 @@ export async function captureCanvasPane(options?: {
   }
 
   try {
+    if (env.inHerdr) {
+      // herdr pane read: visible (default) or recent for scrollback; --ansi keeps colors.
+      const args = ["pane", "read", paneId, "--source", options?.history ? "recent" : "visible"];
+      if (options?.escape) {
+        args.push("--ansi");
+      }
+      const result = spawnSync("herdr", args);
+      const out = result.stdout?.toString() ?? "";
+      // herdr returns exit 0 even on error; a failure comes back as a JSON error body.
+      try {
+        const maybeErr = JSON.parse(out);
+        if (maybeErr?.error) {
+          return {
+            success: false,
+            error: `herdr pane read failed: ${maybeErr.error.message || maybeErr.error.code || "unknown error"}`,
+            paneId,
+          };
+        }
+      } catch {
+        // Not JSON — this is real pane content, which is what we want.
+      }
+      return {
+        success: true,
+        content: out,
+        paneId,
+      };
+    }
+
     // Build tmux capture-pane command
     const args = ["capture-pane", "-t", paneId, "-p"];
 

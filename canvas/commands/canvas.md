@@ -5,7 +5,7 @@ description: Spawn interactive terminal canvases for calendars, documents, and f
 
 # Canvas Command
 
-Spawn and control interactive terminal displays (TUIs) in tmux split panes.
+Spawn and control interactive terminal displays (TUIs) in herdr or tmux split panes.
 
 ## Usage
 
@@ -76,7 +76,7 @@ Wait for user interaction and handle the result:
 
 ## Requirements
 
-- Must be running inside a tmux session
+- Must be running inside a herdr or tmux session (herdr preferred)
 - Terminal should support mouse input for interactive scenarios
 
 ## Skills Reference
