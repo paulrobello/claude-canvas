@@ -234,11 +234,16 @@ export interface ChartConfig {
     color?: string;
     type?: 'line' | 'bar';
   }>;
-  xAxis?: { label?: string; min?: number; max?: number };
-  yAxis?: { label?: string; min?: number; max?: number };
+  xAxis?: { label?: string; min?: number; max?: number; format?: string };
+  yAxis?: { label?: string; min?: number; max?: number; format?: string };
   renderMode?: 'braille' | 'halfblock' | 'ascii' | 'auto';
   showGrid?: boolean;
   showLegend?: boolean;
+  crosshair?: boolean;
+  scale?: 'linear' | 'log';
+  autoBounds?: boolean;
+  bounds?: { minX?: number; maxX?: number; minY?: number; maxY?: number };
+  margins?: { top?: number; right?: number; bottom?: number; left?: number };
 }
 
 export interface LiveChartHandle {
